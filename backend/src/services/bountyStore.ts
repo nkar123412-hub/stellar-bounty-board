@@ -45,7 +45,8 @@ export type BountyTransitionType =
   | "submit"
   | "release"
   | "refund"
-  | "expire";
+  | "expire"
+  | "update_metadata";
 
 /**
  * Represents a historical event in the lifecycle of a bounty.
@@ -533,6 +534,83 @@ export async function invalidateBountyCache(cache: CacheAdapter = getCache()): P
   await cache.del(BOUNTY_LIST_CACHE_KEY);
 }
 
+export async function updateBountyMetadata(
+  id: string,
+  maintainer: string,
+  newTitle: string,
+): Promise<BountyRecord> {
+  return withGlobalLock(async () => {
+    const records = listBounties();
+    const bounty = findBounty(records, id);
+
+    if (bounty.maintainer !== maintainer) {
+      throw new Error("Only the maintainer can update bounty metadata.");
+    }
+
+    if (
+      bounty.status === "released" ||
+      bounty.status === "refunded" ||
+      bounty.status === "expired"
+    ) {
+      throw new Error("Bounty is already finalized and cannot be updated.");
+    }
+
+    const now = nowInSeconds();
+    const updated: BountyRecord = {
+      ...bounty,
+      title: newTitle,
+      version: bounty.version + 1,
+      events: [
+        ...bounty.events,
+        {
+          type: "updated" as any,
+          timestamp: now,
+          actor: maintainer,
+          details: { oldTitle: bounty.title, newTitle },
+        },
+      ],
+    };
+
+    const persisted = persistUpdated(records, updated);
+    appendAuditLogs([
+      {
+        bountyId: id,
+        fromStatus: bounty.status,
+        toStatus: bounty.status,
+        transition: "update_metadata",
+        actor: maintainer,
+        timestamp: now,
+        metadata: {
+          oldTitle: bounty.title,
+          newTitle: newTitle,
+        },
+      },
+    ]);
+    await invalidateBountyCache();
+    return persisted;
+  });
+}
+
+    const persisted = persistUpdated(records, updated);
+    appendAuditLogs([
+      {
+        bountyId: id,
+        fromStatus: bounty.status,
+        toStatus: bounty.status,
+        transition: "update_metadata",
+        actor: maintainer,
+        timestamp: now,
+        metadata: {
+          oldTitle: bounty.title,
+          newTitle: newTitle,
+        },
+      },
+    ]);
+    await invalidateBountyCache();
+    return persisted;
+  });
+}
+
 let globalLock: Promise<void> = Promise.resolve();
 
 async function withGlobalLock<T>(fn: () => T | Promise<T>): Promise<T> {
@@ -900,13 +978,28 @@ export function listBountyAuditLogs(
 
 /**
 
-export function getBountyEvents(bountyId: string): BountyEvent[] {
+export function getBountyEventsPaginated(
+  bountyId: string,
+  page: number,
+  pageSize: number,
+): { data: BountyEvent[]; total: number; page: number; pageSize: number } {
   const records = listBounties();
-  const bounty = records.find((b) => b.id === bountyId);
-  if (!bounty) {
-    throw new Error(`Bounty ${bountyId} not found.`);
-  }
-  return bounty.events ?? [];
+  const bounty = findBounty(records, bountyId);
+  const events = bounty.events || [];
+
+  const total = events.length;
+  const offset = (page - 1) * pageSize;
+  const data = events
+    .slice()
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(offset, offset + pageSize);
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+  };
 }
 
 /**
