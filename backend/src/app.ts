@@ -262,7 +262,24 @@ app.get('/worker/health', (_req: Request, res: Response) => {
 
 app.get('/api/bounties', async (req: Request, res: Response) => {
   const q = typeof req.query.q === 'string' ? req.query.q : undefined;
-  res.json({ data: await listBountiesCached({ q }) });
+  const contributor = typeof req.query.contributor === 'string' ? req.query.contributor : undefined;
+
+  try {
+    let bounties = await listBountiesCached({ q });
+
+    if (contributor) {
+      const trimmed = contributor.trim();
+      if (!trimmed) {
+        jsonError(res, req, 400, 'Contributor address cannot be empty.');
+        return;
+      }
+      bounties = bounties.filter((b) => b.contributor === trimmed);
+    }
+
+    res.json({ data: bounties });
+  } catch (error) {
+    sendError(res, req, error);
+  }
 });
 
 app.get('/api/leaderboard', (req: Request, res: Response) => {
