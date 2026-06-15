@@ -900,13 +900,28 @@ export function listBountyAuditLogs(
 
 /**
 
-export function getBountyEvents(bountyId: string): BountyEvent[] {
+export function getBountyEvents(
+  bountyId: string,
+  options: { limit?: number; offset?: number } = {},
+): { data: BountyEvent[]; total: number; page: number; pageSize: number } {
   const records = listBounties();
   const bounty = records.find((b) => b.id === bountyId);
   if (!bounty) {
     throw new Error(`Bounty ${bountyId} not found.`);
   }
-  return bounty.events ?? [];
+  const events = bounty.events ?? [];
+  const total = events.length;
+  const offset = options.offset ?? 0;
+  const limit = options.limit ?? 50;
+  const data = events.slice(offset, offset + limit);
+  const page = offset > 0 ? Math.floor(offset / limit) + 1 : 1;
+
+  return {
+    data,
+    total,
+    page,
+    pageSize: limit,
+  };
 }
 
 /**
