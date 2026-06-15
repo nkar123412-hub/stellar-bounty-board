@@ -263,6 +263,7 @@ app.get('/worker/health', (_req: Request, res: Response) => {
 app.get('/api/bounties', async (req: Request, res: Response) => {
   const q = typeof req.query.q === 'string' ? req.query.q : undefined;
   const contributor = typeof req.query.contributor === 'string' ? req.query.contributor : undefined;
+  const maintainer = typeof req.query.maintainer === 'string' ? req.query.maintainer : undefined;
 
   try {
     let bounties = await listBountiesCached({ q });
@@ -274,6 +275,15 @@ app.get('/api/bounties', async (req: Request, res: Response) => {
         return;
       }
       bounties = bounties.filter((b) => b.contributor === trimmed);
+    }
+
+    if (maintainer) {
+      const trimmed = maintainer.trim();
+      if (!trimmed) {
+        jsonError(res, req, 400, 'Maintainer address cannot be empty.');
+        return;
+      }
+      bounties = bounties.filter((b) => b.maintainer === trimmed);
     }
 
     res.json({ data: bounties });
