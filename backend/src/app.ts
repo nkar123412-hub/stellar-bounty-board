@@ -504,10 +504,40 @@ app.get('/api/open-issues', async (_req: Request, res: Response) => {
 
 });
 
-app.get('/api/bounties/:id/events', (req: Request, res: Response) => {
+app.get('/api/bounties/:id/events', async (req: Request, res: Response) => {
   try {
-    const events = getBountyEvents(parseId(req.params.id));
-    res.json({ data: events });
+    const page = parsePaginationValue(req.query.page, 'page', 1, 1);
+    const pageSize = parsePaginationValue(req.query.pageSize, 'pageSize', 20, 1, 50);
+    const bountyId = parseId(req.params.id);
+
+    const events = await getBountyEventsPaginated(bountyId, page, pageSize);
+    res.json(events);
+  } catch (error) {
+    sendError(res, req, error);
+  }
+});
+
+app.get('/api/bounties/by-issue', (req: Request, res: Response) => {
+  try {
+    const repo = req.query.repo;
+    const issue = req.query.issue;
+
+    if (typeof repo !== 'string' || !repo.trim() || typeof issue !== 'string' || !issue.trim()) {
+      jsonError(res, req, 400, 'Both repo and issue parameters are required.');
+      return;
+    }
+
+    const bounties = listBounties();
+    const bounty = bounties.find(
+      (b) => b.repo.toLowerCase() === repo.trim().toLowerCase() && b.issueNumber === Number(issue)
+    );
+
+    if (!bounty) {
+      jsonError(res, req, 404, 'Bounty not found for the given issue.');
+      return;
+    }
+
+    res.json({ data: bounty });
   } catch (error) {
     sendError(res, req, error);
   }
