@@ -287,6 +287,19 @@ app.get('/api/bounties/:id/audit-logs', (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/bounties/:id/events', async (req: Request, res: Response) => {
+  try {
+    const page = parsePaginationValue(req.query.page, 'page', 1, 1);
+    const pageSize = parsePaginationValue(req.query.pageSize, 'pageSize', 20, 1, 50);
+    const bountyId = parseId(req.params.id);
+
+    const events = await getBountyEventsPaginated(bountyId, page, pageSize);
+    res.json(events);
+  } catch (error) {
+    sendError(res, req, error);
+  }
+});
+
 app.get('/api/bounties/released/export.csv', (req: Request, res: Response) => {
   try {
     const { repo, contributor, asset, issueNumber } = req.query;

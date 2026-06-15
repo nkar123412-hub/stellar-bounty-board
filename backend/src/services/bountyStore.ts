@@ -898,6 +898,36 @@ export function listBountyAuditLogs(
   };
 }
 
+export async function getBountyEventsPaginated(
+  bountyId: string,
+  page: number,
+  pageSize: number,
+): Promise<{
+  data: BountyEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
+  const records = listBounties();
+  const bounty = findBounty(records, bountyId);
+  const events = bounty.events || [];
+  
+  // Order by timestamp descending
+  const sortedEvents = [...events].sort((a, b) => b.timestamp - a.timestamp);
+  
+  const total = sortedEvents.length;
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+  const data = sortedEvents.slice(start, end);
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+  };
+}
+
 /**
 
 export function getBountyEvents(bountyId: string): BountyEvent[] {
