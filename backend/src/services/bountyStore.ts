@@ -45,7 +45,8 @@ export type BountyTransitionType =
   | "submit"
   | "release"
   | "refund"
-  | "expire";
+  | "expire"
+  | "update_metadata";
 
 /**
  * Represents a historical event in the lifecycle of a bounty.
@@ -531,6 +532,83 @@ export async function listBountiesCached(
  */
 export async function invalidateBountyCache(cache: CacheAdapter = getCache()): Promise<void> {
   await cache.del(BOUNTY_LIST_CACHE_KEY);
+}
+
+export async function updateBountyMetadata(
+  id: string,
+  maintainer: string,
+  newTitle: string,
+): Promise<BountyRecord> {
+  return withGlobalLock(async () => {
+    const records = listBounties();
+    const bounty = findBounty(records, id);
+
+    if (bounty.maintainer !== maintainer) {
+      throw new Error("Only the maintainer can update bounty metadata.");
+    }
+
+    if (
+      bounty.status === "released" ||
+      bounty.status === "refunded" ||
+      bounty.status === "expired"
+    ) {
+      throw new Error("Bounty is already finalized and cannot be updated.");
+    }
+
+    const now = nowInSeconds();
+    const updated: BountyRecord = {
+      ...bounty,
+      title: newTitle,
+      version: bounty.version + 1,
+      events: [
+        ...bounty.events,
+        {
+          type: "updated" as any,
+          timestamp: now,
+          actor: maintainer,
+          details: { oldTitle: bounty.title, newTitle },
+        },
+      ],
+    };
+
+    const persisted = persistUpdated(records, updated);
+    appendAuditLogs([
+      {
+        bountyId: id,
+        fromStatus: bounty.status,
+        toStatus: bounty.status,
+        transition: "update_metadata",
+        actor: maintainer,
+        timestamp: now,
+        metadata: {
+          oldTitle: bounty.title,
+          newTitle: newTitle,
+        },
+      },
+    ]);
+    await invalidateBountyCache();
+    return persisted;
+  });
+}
+
+    const persisted = persistUpdated(records, updated);
+    appendAuditLogs([
+      {
+        bountyId: id,
+        fromStatus: bounty.status,
+        toStatus: bounty.status,
+        transition: "update_metadata",
+        actor: maintainer,
+        timestamp: now,
+        metadata: {
+          oldTitle: bounty.title,
+          newTitle: newTitle,
+        },
+      },
+    ]);
+    await invalidateBountyCache();
+    return persisted;
+  });
 }
 
 let globalLock: Promise<void> = Promise.resolve();
