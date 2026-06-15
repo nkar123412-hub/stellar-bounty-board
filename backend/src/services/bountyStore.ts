@@ -978,13 +978,28 @@ export function listBountyAuditLogs(
 
 /**
 
-export function getBountyEvents(bountyId: string): BountyEvent[] {
+export function getBountyEventsPaginated(
+  bountyId: string,
+  page: number,
+  pageSize: number,
+): { data: BountyEvent[]; total: number; page: number; pageSize: number } {
   const records = listBounties();
-  const bounty = records.find((b) => b.id === bountyId);
-  if (!bounty) {
-    throw new Error(`Bounty ${bountyId} not found.`);
-  }
-  return bounty.events ?? [];
+  const bounty = findBounty(records, bountyId);
+  const events = bounty.events || [];
+
+  const total = events.length;
+  const offset = (page - 1) * pageSize;
+  const data = events
+    .slice()
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(offset, offset + pageSize);
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+  };
 }
 
 /**
